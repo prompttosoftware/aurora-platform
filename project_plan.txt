@@ -1,0 +1,1059 @@
+# Project Plan: Aurora - Renewable Energy Management Platform
+
+## 1. Introduction and Overview
+
+### 1.1 Project Goal
+The primary goal of the Aurora platform is to empower businesses and individuals to effectively track, monitor, and manage their energy usage, particularly focusing on renewable energy sources. By providing real-time data, predictive insights, and actionable recommendations, Aurora aims to foster greater energy efficiency and sustainability.
+
+### 1.2 Key Features
+- **Real-time Energy Monitoring**: Live tracking of energy consumption and production from various sources.
+- **Historical Data Analysis**: Comprehensive historical data for trend analysis and reporting.
+- **Energy Forecasting**: Predictive models for future energy consumption and renewable energy generation.
+- **Personalized Recommendations**: Tailored suggestions for improving energy efficiency based on usage patterns and forecasts.
+- **User Management**: Secure user registration, authentication, and profile management.
+- **Data Ingestion**: Robust mechanisms for integrating with diverse energy data sources (e.g., smart meters, IoT devices, utility APIs).
+- **Alerting & Notifications**: Proactive alerts for anomalies or significant events.
+
+### 1.3 Target Audience
+- Small to medium-sized businesses looking to optimize their energy costs and reduce carbon footprint.
+- Homeowners with solar panels or smart home energy systems.
+- Energy consultants and researchers.
+
+## 2. System Architecture
+
+### 2.1 High-Level Architecture
+Aurora will adopt a microservices-oriented architecture to ensure scalability, resilience, and maintainability. Components will communicate primarily via asynchronous message queues and synchronous REST APIs.
+
+```
++-------------------+
+|   User Devices    |
+| (Web Browser, IoT)|
++--------+----------+
+         | (REST/MQTT/Custom API)
+         v
++-------------------+
+|   API Gateway     |
+| (e.g., Nginx/API GW)|
++-------------------+
+         |
+         v
++-----------------------------------------------------------------------------------------------------------------------------------+
+|                                                           Backend Services                                                          |
+| +-----------------------+    +---------------------------+    +--------------------------+    +--------------------------------+    |
+| | Authentication & User |    |     Data Ingestion        |    |   Real-time Processing   |    |    Forecasting & Recommendation|    |
+| |      Service          |    |      Service              |    |       Service            |    |         Engine Services        |    |
+| | (FastAPI)             |    | (FastAPI, Kafka Producer) |    | (Kafka Consumer, Python  |    | (FastAPI, Python ML)           |    |
+| +-----------+-----------+    +-------------+-------------+    |    Streaming Logic)      |    +--------------------------------+    |
+|             |                  |             |              +--------------+-------------+                                         |
+|             |                  |             |              |                              |                                        |
+|             +<-----------------+-------------+--------------+------------------------------+                                        |
+|                                          |                                                                                          |
+|                                          v                                                                                          |
+|                                 +------------------+                                                                              |
+|                                 |   Message Queue  |                                                                              |
+|                                 |   (e.g., Kafka)  |                                                                              |
+|                                 +------------------+                                                                              |
+|                                          |                                                                                          |
+|                                          v                                                                                          |
+| +-----------------------+    +-----------------------+                                                                              |
+| |  Historical Data API  |    |  Reporting & Analytics|                                                                              |
+| |      Service          |    |      Service          |                                                                              |
+| | (FastAPI)             |    | (FastAPI)             |                                                                              |
+| +-----------+-----------+    +-----------+-----------+                                                                              |
+|             |                          |                                                                                              |
++-----------------------------------------------------------------------------------------------------------------------------------+
+              |                          |
+              v                          v
++---------------------------+  +--------------------------------+
+|    Relational Database    |  |    Time-Series Database      |
+|  (e.g., PostgreSQL)       |  |  (e.g., InfluxDB/Prometheus) |
+| (User, Auth, Meta-data)   |  | (Raw, Processed Energy Data) |
++---------------------------+  +--------------------------------+
+```
+
+### 2.2 Technology Stack
+-   **Frontend**: React (with Next.js for SSR/SEO benefits)
+-   **Backend (API Services)**: Python with FastAPI
+-   **Messaging Queue**: Apache Kafka (for high-throughput, real-time data streams)
+-   **Databases**:
+    -   **PostgreSQL**: For user management, authentication data, recommendations, and static metadata.
+    -   **InfluxDB**: For time-series energy consumption and production data (raw and processed).
+-   **Machine Learning**: Python libraries (e.g., scikit-learn, Prophet, TensorFlow/PyTorch if needed for advanced models).
+-   **Containerization**: Docker
+-   **Deployment**: AWS (ECS/EKS, RDS, MSK, S3, CloudWatch, Prometheus/Grafana)
+-   **CI/CD**: GitHub Actions
+
+### 2.3 Repository Structure
+The project will use a monorepo approach to manage various services and the frontend application, fostering better collaboration and dependency management.
+
+```
+project/
+├── frontend/                     # React/Next.js application
+├── services/
+│   ├── auth_service/             # User authentication and authorization
+│   ├── data_ingestion_service/   # Ingests raw energy data
+│   ├── real_time_processing_service/ # Processes streaming data
+│   ├── forecasting_service/      # Energy prediction engine
+│   ├── recommendation_service/   # Personalized recommendations
+│   ├── reporting_service/        # Aggregated data, historical trends
+│   └── shared_libs/              # Common utilities, data models, client SDKs
+├── infrastructure/               # Terraform/CloudFormation for infrastructure setup
+├── .github/                      # CI/CD workflows
+└── docs/                         # Project documentation
+```
+
+## 3. Core Components
+
+Each core component will be a distinct microservice (or a logical module within a service) with its own responsibilities.
+
+### 3.1. Authentication & User Service
+
+#### 1. Core Functionality
+-   User registration, login, and logout.
+-   User profile management (update details, change password).
+-   Role-Based Access Control (RBAC) for different user types (e.g., admin, standard user).
+-   JWT (JSON Web Token) generation and validation for secure API access.
+
+#### 2. Technical Design & Architecture
+-   **Technology**: Python FastAPI.
+-   **Database**: PostgreSQL for user credentials (hashed passwords), roles, and profile information.
+-   **Authentication**: OAuth2.0 password flow for token generation, JWT for stateless authentication. PyJWT library.
+-   **API Endpoints**:
+    -   `POST /auth/register`: User registration.
+    -   `POST /auth/token`: Obtain JWT token.
+    -   `GET /users/me`: Get current user profile.
+    -   `PUT /users/me`: Update current user profile.
+    -   `DELETE /users/me`: Delete user account (soft delete).
+-   **Data Structures**: User model (ID, username, email, hashed_password, role, created_at, updated_at).
+
+#### 3. User Experience
+-   Standard login/registration forms.
+-   Clear feedback on authentication status (success/failure).
+-   User profile page for managing personal information.
+
+#### 4. Data Management
+-   **Database Schema**: `users` table: `id (PK)`, `username (unique)`, `email (unique)`, `password_hash`, `role`, `created_at`, `updated_at`.
+-   **Password Hashing**: `bcrypt` (or `argon2`) using `passlib` library.
+-   **Data Migration**: Alembic for database schema management.
+
+#### 5. Error Handling & Edge Cases
+-   Invalid credentials: Return 401 Unauthorized.
+-   Duplicate username/email during registration: Return 409 Conflict.
+-   Malformed requests: Return 400 Bad Request.
+-   Password complexity requirements enforced at registration.
+
+#### 6. Security Considerations
+-   **Password Hashing**: Store only salted and hashed passwords.
+-   **JWT Security**: Use strong secret keys, short expiry times, store tokens securely on client-side (HttpOnly cookies or memory for SPAs).
+-   **Input Validation**: Sanitize all user inputs to prevent injection attacks.
+-   **Rate Limiting**: Implement for login attempts to prevent brute-force attacks.
+-   **HTTPS**: All communication must be over HTTPS.
+
+#### 7. Performance & Scalability
+-   **Stateless JWT**: Reduces server load as session data is not stored server-side.
+-   **Database Indexing**: Indexes on `username` and `email` for fast lookups.
+-   **Scalability**: Service can be horizontally scaled independently.
+
+#### 8. Deployment & Infrastructure
+-   Containerized using Docker.
+-   Deployed on AWS ECS/EKS.
+-   PostgreSQL managed by AWS RDS.
+
+#### 9. Test-Driven Development Verification
+-   **Immediate Verification**:
+    -   Manually test `POST /auth/register` and `POST /auth/token` via curl or Postman to ensure basic success/failure responses.
+    -   Run a simple FastAPI `uvicorn` instance locally and hit endpoints.
+-   **Incremental Testing**:
+    -   Start with unit tests for password hashing utility function.
+    -   Test user creation logic in isolation (without DB).
+    -   Test JWT encoding/decoding function.
+
+#### 10. Testing Strategy
+
+##### 10.1 Testing Hierarchy
+1.  **Unit Tests - Simple Cases First**
+    -   Test `hash_password(password)` and `verify_password(plain, hashed)` functions.
+    -   Test `create_access_token(data)` for correct JWT generation.
+    -   Test `authenticate_user(username, password)` function with valid/invalid credentials (mocking DB calls for simplicity, or using an in-memory DB).
+    -   Test `get_current_user` dependency logic.
+2.  **Integration Tests - Minimal Setup**
+    -   Use `TestClient` from `fastapi.testclient` to test API endpoints.
+    -   Test `POST /auth/register` against a test PostgreSQL database (e.g., using `testcontainers` or a local Dockerized DB).
+    -   Test `POST /auth/token` to ensure token issuance and subsequent `GET /users/me` with the token.
+    -   Verify roles and permissions using a test user.
+3.  **End-to-End Tests - Critical Paths Only**
+    -   Use Playwright/Cypress to simulate a full user registration, login, and profile update flow through the frontend, interacting with the deployed backend.
+
+##### 10.2 Mocking Strategy - SIMPLIFIED APPROACH
+-   **Prefer Dependency Injection**: All external dependencies (e.g., database session, password hasher) will be injected into functions/classes.
+-   **Use Simple Stubs**: For unit tests, `mock.patch` or simple Python objects can stub out database repository methods (e.g., `UserRepository.get_by_username`).
+-   **Mock at System Boundaries**: Mock `requests` if making external HTTP calls (though not expected for this service's core). For database interactions in unit tests, use in-memory alternatives or simple mocks; for integration tests, use a real, isolated test database.
+
+##### 10.3 Testing Tools & Frameworks
+-   **Python**: `pytest`, `pytest-asyncio`, `pytest-cov` (coverage).
+-   **Mocking**: Built-in `unittest.mock`.
+-   **Test Database**: PostgreSQL for integration tests (via `testcontainers` or local setup).
+-   **Common Test Patterns**:
+    -   `test_api_endpoint_success_status_code()`
+    -   `test_api_endpoint_invalid_input()`
+    -   `test_service_method_with_mocked_dependency()`
+
+##### 10.4 Test Data Management
+-   **Creation**: Use `factory-boy` or simple Python functions to generate test user data. For integration tests, a dedicated `conftest.py` fixture will set up and tear down a clean database state per test.
+-   **Cleanup**: `pytest` fixtures with `yield` will ensure database cleanup after each test/suite (e.g., truncate tables, drop schema).
+
+#### 11. Monitoring & Logging
+-   **Logging**: Python `logging` module configured to output JSON logs. Logs aggregated by CloudWatch Logs (AWS).
+-   **Monitoring**: FastAPI endpoints will be instrumented with Prometheus client library (`prometheus_client`) to expose metrics (request counts, latency). Grafana dashboards for visualization.
+-   **Alerting**: CloudWatch Alarms for error rates, high latency, or service unavailability.
+
+#### 12. Dependencies
+-   PostgreSQL Database.
+-   `fastapi`, `uvicorn`, `python-jose[cryptography]`, `passlib[bcrypt]`, `SQLAlchemy`, `psycopg2-binary`.
+
+#### 13. Potential Risks & Mitigations
+-   **Risk**: Brute-force attacks on login.
+    -   **Mitigation**: Implement rate limiting on login endpoint (e.g., using `fastapi-limiter`).
+-   **Risk**: JWT secret key compromise.
+    -   **Mitigation**: Store secret key securely (e.g., AWS Secrets Manager). Rotate keys regularly.
+-   **Risk**: SQL Injection.
+    -   **Mitigation**: Use SQLAlchemy ORM which handles parameterization automatically. Input validation.
+
+---
+
+### 3.2. Data Ingestion Service
+
+#### 1. Core Functionality
+-   Receive raw energy data (e.g., consumption, production, environmental factors) from various sources (REST API calls from IoT devices/gateways, third-party energy provider APIs).
+-   Validate incoming data format and content.
+-   Publish validated data to a Kafka topic for further processing.
+
+#### 2. Technical Design & Architecture
+-   **Technology**: Python FastAPI.
+-   **Messaging**: Apache Kafka Producer (using `confluent-kafka-python` or `kafka-python`).
+-   **API Endpoints**:
+    -   `POST /ingest/energy_data`: Receive energy meter readings.
+    -   `POST /ingest/weather_data`: Receive weather station data.
+-   **Data Structures**: Define Pydantic models for incoming data payload (e.g., `EnergyData(device_id: str, timestamp: datetime, consumption_kwh: float, production_kwh: float)`).
+-   **Schema Registry**: Potentially use Confluent Schema Registry for Avro/Protobuf schemas on Kafka messages, though JSON will be simpler initially.
+
+#### 3. User Experience
+-   This is a backend service; no direct user interaction.
+
+#### 4. Data Management
+-   Data is immediately pushed to Kafka. No direct database storage for raw incoming data in this service.
+-   **Kafka Topics**:
+    -   `raw_energy_data`: For energy meter readings.
+    -   `raw_weather_data`: For weather data.
+-   **Message Format**: JSON (initially, for simplicity and flexibility).
+
+#### 5. Error Handling & Edge Cases
+-   **Invalid Data**: Return 400 Bad Request with detailed error messages if Pydantic validation fails.
+-   **Kafka Producer Failure**: Implement retry logic for Kafka message publishing. If persistent failure, log and alert. Potentially route to a Dead-Letter Queue (DLQ) Kafka topic.
+-   **Rate Limiting**: Implement for API endpoints to prevent abuse.
+
+#### 6. Security Considerations
+-   **Authentication/Authorization**: API key authentication for IoT devices/gateways, or JWT validation if the source is a known application.
+-   **Input Validation**: Strict Pydantic validation.
+-   **HTTPS**: Mandatory for all API communication.
+
+#### 7. Performance & Scalability
+-   **Asynchronous I/O**: FastAPI's `async/await` ensures non-blocking operations.
+-   **Kafka**: High-throughput message queue scales well horizontally.
+-   **Scalability**: Service can be horizontally scaled to handle high ingestion rates.
+
+#### 8. Deployment & Infrastructure
+-   Containerized using Docker.
+-   Deployed on AWS ECS/EKS.
+-   Leverages AWS MSK (Managed Streaming for Kafka) as the message queue.
+
+#### 9. Test-Driven Development Verification
+-   **Immediate Verification**:
+    -   Manually send a `POST` request to `/ingest/energy_data` endpoint using `curl` or Postman with valid/invalid JSON payloads.
+    -   Observe service logs to confirm data validation success/failure and Kafka production attempts.
+-   **Incremental Testing**:
+    -   Test Pydantic models for data validation logic in isolation.
+    -   Test Kafka producer helper function to ensure it can send messages (mocking Kafka connection for unit tests).
+
+#### 10. Testing Strategy
+
+##### 10.1 Testing Hierarchy
+1.  **Unit Tests - Simple Cases First**
+    -   Test Pydantic data models for valid and invalid inputs (`EnergyData.parse_obj`).
+    -   Test the `send_to_kafka` utility function, mocking the Kafka producer client.
+2.  **Integration Tests - Minimal Setup**
+    -   Use `TestClient` to send mock HTTP requests to the FastAPI endpoints.
+    -   For Kafka interaction, use `testcontainers` with a local Kafka instance, or a lightweight in-memory Kafka substitute if available for Python (less common, so prefer `testcontainers`).
+    -   Verify that messages are correctly published to the specified Kafka topics and their content is as expected.
+3.  **End-to-End Tests - Critical Paths Only**
+    -   Simulate an IoT device sending data to the `Data Ingestion Service`.
+    -   Verify that the `Real-time Processing Service` (the next consumer) successfully receives and processes this data. This requires orchestrating multiple services in a test environment.
+
+##### 10.2 Mocking Strategy - SIMPLIFIED APPROACH
+-   **Prefer Dependency Injection**: Kafka producer client will be injected into the API route handlers.
+-   **Use Simple Stubs**: For unit tests, the Kafka producer can be mocked using `unittest.mock` to verify `send()` calls.
+-   **Mock at System Boundaries**: Mock the Kafka client when unit testing the API logic itself. For integration tests, use a real Kafka instance (e.g., via `testcontainers`).
+
+##### 10.3 Testing Tools & Frameworks
+-   **Python**: `pytest`, `pytest-asyncio`.
+-   **Mocking**: Built-in `unittest.mock`.
+-   **Test Kafka**: `testcontainers-python` for spinning up a Kafka container.
+
+##### 10.4 Test Data Management
+-   **Creation**: Define valid and invalid JSON payloads for incoming data directly in test files.
+-   **Cleanup**: Kafka topics used for testing can be configured with short retention periods, or test-specific topics can be created and deleted if supported by `testcontainers`.
+
+#### 11. Monitoring & Logging
+-   **Logging**: JSON logs of incoming requests, validation results, and Kafka publish status. CloudWatch Logs for aggregation.
+-   **Monitoring**: Prometheus metrics for request count, latency, success/failure rate of Kafka messages. Grafana dashboards.
+-   **Alerting**: CloudWatch Alarms on high error rates, low message production rates, or Kafka connectivity issues.
+
+#### 12. Dependencies
+-   Apache Kafka (AWS MSK).
+-   `fastapi`, `uvicorn`, `pydantic`, `confluent-kafka` (or `kafka-python`).
+
+#### 13. Potential Risks & Mitigations
+-   **Risk**: Data format changes from external sources.
+    -   **Mitigation**: Robust schema validation (Pydantic). Implement versioning for API endpoints (`/v1/ingest/energy_data`). Maintain clear documentation for data providers.
+-   **Risk**: Kafka backlog due to high ingestion.
+    -   **Mitigation**: Monitor Kafka consumer lag. Auto-scaling of the Data Ingestion Service. Provision Kafka topic partitions appropriately.
+-   **Risk**: Data loss if Kafka is unavailable.
+    -   **Mitigation**: Implement retry mechanisms and potential DLQ for failed Kafka pushes.
+
+---
+
+### 3.3. Real-time Processing Service
+
+#### 1. Core Functionality
+-   Consume raw energy data from Kafka topics.
+-   Perform data cleansing, normalization, and aggregation (e.g., sum kWh per minute/hour).
+-   Identify anomalies (e.g., sudden spikes, zeros) using simple statistical methods.
+-   Enrich data with metadata (e.g., device location, type).
+-   Store processed, enriched, and aggregated data into the time-series database.
+
+#### 2. Technical Design & Architecture
+-   **Technology**: Python (custom consumer using `confluent-kafka-python` or `kafka-python`). Could evolve to Apache Flink/Spark Streaming if complexity increases significantly, but start simpler.
+-   **Messaging**: Apache Kafka Consumer.
+-   **Database**: InfluxDB for time-series data storage.
+-   **Processing Logic**: Python scripts running continuously, polling Kafka. Use a producer-consumer pattern within the service for concurrent processing and database writes.
+-   **Data Structures**: Pydantic models for processed data (e.g., `ProcessedEnergyData(device_id: str, timestamp: datetime, aggregated_kwh: float, anomaly_flag: bool)`).
+
+#### 3. User Experience
+-   No direct user interaction.
+
+#### 4. Data Management
+-   **Input**: `raw_energy_data` Kafka topic.
+-   **Output**: InfluxDB.
+    -   **Measurements**: `energy_consumption`, `energy_production`, `device_status`, `anomalies`.
+    -   **Tags**: `device_id`, `location`, `energy_source_type`.
+    -   **Fields**: `value_kwh`, `is_anomaly`, `aggregated_period_minutes`.
+-   **Data Retention**: Configure InfluxDB retention policies (e.g., raw data for 30 days, aggregated data for 5 years).
+
+#### 5. Error Handling & Edge Cases
+-   **Malformed Messages**: Messages failing schema validation or processing errors are logged and moved to a Kafka DLQ for manual inspection.
+-   **Database Write Failures**: Retry mechanism for InfluxDB writes. If persistent, alert and log.
+-   **Backpressure**: Monitor consumer lag; auto-scale consumer instances if processing falls behind.
+-   **Out-of-Order Data**: InfluxDB handles out-of-order data, but processing logic should account for potential timestamp discrepancies.
+
+#### 6. Security Considerations
+-   **Kafka Access**: Authenticate with Kafka using SASL/SSL.
+-   **InfluxDB Access**: Use least-privilege credentials.
+-   **Data Validation**: Re-validate data even if ingested by previous service, for robustness.
+
+#### 7. Performance & Scalability
+-   **Kafka Partitions**: Multiple consumer instances can process data from different Kafka partitions concurrently.
+-   **Batch Writes**: Optimize InfluxDB writes by batching data points.
+-   **Scalability**: Horizontally scalable by deploying more instances of the service.
+-   **Efficiency**: Optimize Python processing loops for CPU and memory usage.
+
+#### 8. Deployment & Infrastructure
+-   Containerized using Docker.
+-   Deployed on AWS ECS/EKS.
+-   InfluxDB can be self-hosted on EC2 or managed service (if available, or a comparable time-series DB like AWS Timestream).
+
+#### 9. Test-Driven Development Verification
+-   **Immediate Verification**:
+    -   Manually publish messages to the `raw_energy_data` Kafka topic (e.g., using `kafka-console-producer`).
+    -   Observe the Real-time Processing Service logs to confirm messages are consumed and processed.
+    -   Query InfluxDB manually to verify processed data is stored correctly.
+-   **Incremental Testing**:
+    -   Write unit tests for data normalization and aggregation functions with mock input data.
+    -   Test anomaly detection logic with sample data sets (normal, spike, drop).
+
+#### 10. Testing Strategy
+
+##### 10.1 Testing Hierarchy
+1.  **Unit Tests - Simple Cases First**
+    -   Test `clean_and_normalize(raw_data)` function (pure function).
+    -   Test `aggregate_data(data_points)` for various aggregation periods (e.g., 5-min, 60-min sums).
+    -   Test `detect_anomaly(value, historical_avg, std_dev)` with different inputs.
+    -   Test data enrichment logic.
+2.  **Integration Tests - Minimal Setup**
+    -   Use `testcontainers` to spin up Kafka and InfluxDB instances.
+    -   Publish messages to Kafka programmatically (from test code).
+    -   Run the Real-time Processing Service in a test mode.
+    -   Verify that processed data is correctly written to InfluxDB by querying it.
+    -   Test error handling by sending malformed Kafka messages.
+3.  **End-to-End Tests - Critical Paths Only**
+    -   Simulate the full flow: `Data Ingestion Service` -> Kafka -> `Real-time Processing Service` -> InfluxDB.
+    -   Verify that queries to the `Reporting & Analytics Service` (which reads from InfluxDB) reflect the correctly processed data.
+
+##### 10.2 Mocking Strategy - SIMPLIFIED APPROACH
+-   **Prefer Dependency Injection**: Kafka consumer client and InfluxDB client will be injected.
+-   **Use Simple Stubs**: For unit tests, mock the Kafka consumer's `poll()` method to return specific messages, and mock InfluxDB client's `write_api().write()` to assert calls.
+-   **Mock at System Boundaries**: Mock Kafka and InfluxDB clients in unit tests. Use real instances (e.g., via `testcontainers`) for integration tests.
+
+##### 10.3 Testing Tools & Frameworks
+-   **Python**: `pytest`, `pytest-asyncio`.
+-   **Mocking**: Built-in `unittest.mock`.
+-   **Test Containers**: `testcontainers-python` for Kafka and InfluxDB.
+
+##### 10.4 Test Data Management
+-   **Creation**: Programmatically generate lists of raw energy data dictionaries, including edge cases (missing values, extreme spikes).
+-   **Cleanup**: InfluxDB test database/measurements will be created and dropped by test fixtures. Kafka test topics will be managed with short retention or explicit deletion.
+
+#### 11. Monitoring & Logging
+-   **Logging**: Detailed logs for message consumption, processing steps, data enrichment, anomaly detection results, and database write operations. CloudWatch Logs.
+-   **Monitoring**: Kafka consumer lag, processing throughput, successful/failed database writes, number of detected anomalies. Prometheus metrics and Grafana dashboards.
+-   **Alerting**: Alerts on high consumer lag, high error rates during processing/writes, or frequent anomaly detections (might indicate data source issues).
+
+#### 12. Dependencies
+-   Apache Kafka (AWS MSK).
+-   InfluxDB.
+-   `confluent-kafka` (or `kafka-python`), `influxdb-client`, `pandas`, `numpy`, `scipy` (for basic statistics).
+
+#### 13. Potential Risks & Mitigations
+-   **Risk**: Data inconsistencies if processing logic is flawed.
+    -   **Mitigation**: Comprehensive unit and integration tests. Robust data validation. Detailed logging of processing steps.
+-   **Risk**: Backpressure leading to Kafka message build-up.
+    -   **Mitigation**: Monitor consumer lag closely. Implement auto-scaling for the processing service. Optimize processing logic.
+-   **Risk**: Data quality issues from source impacting downstream services.
+    -   **Mitigation**: Anomaly detection. DLQ for malformed messages. Implement data quality checks dashboard.
+
+---
+
+### 3.4. Energy Forecasting Engine
+
+#### 1. Core Functionality
+-   Load historical energy data from InfluxDB.
+-   Train various time-series forecasting models (e.g., ARIMA, Prophet, LSTM) based on historical usage and external factors (weather, time of day/week/year).
+-   Generate energy consumption and production forecasts for various horizons (e.g., next 24 hours, next 7 days).
+-   Expose forecasts via a REST API.
+
+#### 2. Technical Design & Architecture
+-   **Technology**: Python (FastAPI for API, `pandas`, `numpy`, `scikit-learn`, `prophet`, potentially `tensorflow`/`pytorch` for deep learning models).
+-   **Database**: InfluxDB for historical data, PostgreSQL for model metadata (e.g., model ID, version, training date, performance metrics).
+-   **Model Training**: Asynchronous background tasks (e.g., Celery) triggered periodically or on demand.
+-   **Model Serving**: FastAPI endpoint to serve predictions. Models loaded into memory or from a model store (e.g., S3).
+-   **API Endpoints**:
+    -   `GET /forecast/energy_consumption/{device_id}?horizon=...`: Get consumption forecast.
+    -   `GET /forecast/energy_production/{device_id}?horizon=...`: Get production forecast.
+    -   `POST /forecast/train_model`: Trigger model retraining (admin only).
+-   **Data Structures**: Forecast response (e.g., `ForecastData(device_id: str, timestamp: datetime, predicted_kwh: float, confidence_interval_lower: float, confidence_interval_upper: float)`).
+
+#### 3. User Experience
+-   Forecast data presented visually on dashboards (charts, graphs).
+-   Ability to select forecast horizon.
+
+#### 4. Data Management
+-   **Input**: Historical processed energy data from InfluxDB. External weather data (if integrated).
+-   **Output**: Forecast data stored in InfluxDB (or cached in Redis). Model artifacts stored in S3.
+-   **Model Versioning**: Store model metadata (metrics, parameters) in PostgreSQL. MLflow can be integrated for advanced ML lifecycle management.
+
+#### 5. Error Handling & Edge Cases
+-   **Insufficient Data**: If historical data is too sparse, return 404/400 and provide guidance.
+-   **Model Training Failures**: Log errors, notify administrators. Retrain with fallback strategy.
+-   **Prediction Outliers**: Implement sanity checks on forecast results (e.g., consumption cannot be negative).
+
+#### 6. Security Considerations
+-   **API Security**: Authenticate API requests (JWT from Auth Service).
+-   **Data Access**: Read-only access to InfluxDB historical data.
+-   **Model Security**: Ensure models are loaded from trusted storage (S3 with IAM policies).
+
+#### 7. Performance & Scalability
+-   **Caching**: Cache recent forecasts in Redis to reduce computation on repeated requests.
+-   **Batch Processing**: Model training is a batch process; optimize for parallel execution if multiple devices.
+-   **Optimized Queries**: Efficient InfluxDB queries for historical data extraction.
+-   **Scalability**: FastAPI service can be horizontally scaled. Training can be done on dedicated compute instances.
+
+#### 8. Deployment & Infrastructure
+-   Containerized using Docker.
+-   Deployed on AWS ECS/EKS.
+-   S3 for model storage.
+-   Potentially AWS SageMaker for more robust MLOps, but start with EC2/ECS.
+
+#### 9. Test-Driven Development Verification
+-   **Immediate Verification**:
+    -   Manually send a `GET` request to `/forecast/energy_consumption` for a known device.
+    -   Verify the returned JSON structure and basic validity of values (e.g., non-negative).
+-   **Incremental Testing**:
+    -   Test data loading function from InfluxDB with mock InfluxDB client response.
+    -   Test individual model training functions with small, synthetic datasets.
+    -   Test prediction function with trained mock models.
+
+#### 10. Testing Strategy
+
+##### 10.1 Testing Hierarchy
+1.  **Unit Tests - Simple Cases First**
+    -   Test `prepare_data_for_model(df)` for feature engineering.
+    -   Test `train_prophet_model(df)` with a small, deterministic dataset.
+    -   Test `predict_with_model(model, future_df)` for correct output shape and basic value ranges.
+2.  **Integration Tests - Minimal Setup**
+    -   Use `TestClient` to test API endpoints (`/forecast/...`).
+    -   Mock the InfluxDB client or use a `testcontainers` InfluxDB instance populated with sample historical data.
+    -   Verify that API calls return expected forecast data structure and reasonable predictions for the given sample data.
+3.  **End-to-End Tests - Critical Paths Only**
+    -   Generate realistic historical data (via `Data Ingestion` and `Real-time Processing`).
+    -   Trigger model training.
+    -   Request a forecast via the `Reporting & Analytics Service` (which calls this service) and verify the visual representation on the frontend.
+
+##### 10.2 Mocking Strategy - SIMPLIFIED APPROACH
+-   **Prefer Dependency Injection**: InfluxDB client, S3 client, and ML model instances will be injected.
+-   **Use Simple Stubs**: For unit tests, mock InfluxDB client's `query()` to return pre-defined dataframes. Mock S3 client for model loading/saving.
+-   **Mock at System Boundaries**: Mock InfluxDB and S3 in unit tests. For integration tests, use `testcontainers` for InfluxDB and `moto` for mocking AWS S3.
+
+##### 10.3 Testing Tools & Frameworks
+-   **Python**: `pytest`, `pytest-asyncio`, `pytest-mock`.
+-   **ML Testing**: Use `scikit-learn` or `prophet`'s own testing utilities for model correctness. Evaluate model performance metrics (MAE, RMSE) on validation sets.
+
+##### 10.4 Test Data Management
+-   **Creation**: Generate synthetic historical energy data that exhibits trends, seasonality, and noise. Use real-world patterns as a guide. For integration tests, populate `testcontainers` InfluxDB with this data.
+-   **Cleanup**: Delete test models from S3 and forecast data from InfluxDB using test fixtures.
+
+#### 11. Monitoring & Logging
+-   **Logging**: Logs for model training start/end, training errors, prediction requests, and prediction errors.
+-   **Monitoring**: Model training duration, prediction latency, model inference errors. Track key model performance metrics (e.g., RMSE, MAE) over time in a dashboard.
+-   **Alerting**: Alerts for significant drops in model accuracy, persistent training failures, or high prediction latency.
+
+#### 12. Dependencies
+-   InfluxDB.
+-   S3 (for model storage).
+-   `fastapi`, `uvicorn`, `pandas`, `numpy`, `scikit-learn`, `prophet`, `influxdb-client`, `boto3`.
+
+#### 13. Potential Risks & Mitigations
+-   **Risk**: Model accuracy degrades over time (concept drift).
+    -   **Mitigation**: Implement continuous model monitoring for accuracy. Schedule regular retraining. Implement A/B testing for new models.
+-   **Risk**: High computational cost for training complex models.
+    -   **Mitigation**: Optimize training pipelines. Utilize cloud-native ML services (SageMaker). Pre-train models offline.
+-   **Risk**: Insufficient historical data for accurate forecasts.
+    -   **Mitigation**: Start with simpler models requiring less data. Clearly communicate limitations to users.
+
+---
+
+### 3.5. Recommendation Engine
+
+#### 1. Core Functionality
+-   Generate personalized energy efficiency recommendations based on:
+    -   User's historical energy consumption/production.
+    -   Forecasting data (e.g., predicting peak usage times).
+    -   User profile information (e.g., house size, appliances).
+    -   Pre-defined rules and best practices for energy saving.
+    -   Contextual information (e.g., local weather).
+-   Store and retrieve recommendations.
+-   Expose recommendations via a REST API.
+
+#### 2. Technical Design & Architecture
+-   **Technology**: Python FastAPI.
+-   **Database**: PostgreSQL for storing recommendation rules, user-specific recommendations, and user actions on recommendations.
+-   **Data Sources**: InfluxDB for historical energy data, Forecasting Engine service for predictions, Auth Service for user profile.
+-   **Recommendation Logic**:
+    -   **Rule-based**: If condition X (e.g., high peak usage), then recommend Y (e.g., shift laundry to off-peak).
+    -   **Simple ML (e.g., clustering/classification)**: Group users by similar energy patterns and recommend actions popular in efficient groups.
+-   **API Endpoints**:
+    -   `GET /recommendations/{user_id}`: Get personalized recommendations.
+    -   `POST /recommendations/{recommendation_id}/feedback`: Submit user feedback on recommendation (helpful/not helpful).
+    -   `POST /recommendations/rules`: Add/update recommendation rules (admin only).
+-   **Data Structures**: `Recommendation(id, user_id, title, description, category, suggested_action, effectiveness_score, generated_at, feedback_score)`.
+
+#### 3. User Experience
+-   Recommendations displayed prominently on the user dashboard.
+-   Ability for users to provide feedback (thumbs up/down) on recommendations.
+-   Clear, actionable language for recommendations.
+
+#### 4. Data Management
+-   **Input**: User data (PostgreSQL), Energy data (InfluxDB), Forecasts (Forecasting Engine API).
+-   **Output**: PostgreSQL for `recommendations` table, potentially `user_recommendation_feedback` table.
+-   **Schema**: `recommendations` table: `id (PK)`, `user_id (FK)`, `title`, `description`, `category`, `status (active/dismissed)`, `generated_at`, `feedback_score`.
+
+#### 5. Error Handling & Edge Cases
+-   **No Data**: If insufficient data for a user, provide generic tips or indicate data needed.
+-   **Irrelevant Recommendations**: Use feedback to refine rules/models.
+-   **Rule Conflicts**: Implement priority system for rules.
+
+#### 6. Security Considerations
+-   **API Security**: Authenticate API requests (JWT). Ensure users can only retrieve their own recommendations.
+-   **Data Privacy**: Handle user energy data with care; ensure anonymization if used for global insights.
+
+#### 7. Performance & Scalability
+-   **Caching**: Cache recommendations for a short period (e.g., 24 hours) to avoid recalculation for every request.
+-   **Batch Generation**: Recommendations can be generated in a batch process periodically for active users.
+-   **Scalability**: Service can be horizontally scaled.
+
+#### 8. Deployment & Infrastructure
+-   Containerized using Docker.
+-   Deployed on AWS ECS/EKS.
+-   PostgreSQL managed by AWS RDS.
+
+#### 9. Test-Driven Development Verification
+-   **Immediate Verification**:
+    -   Manually trigger `GET /recommendations/{user_id}` for a test user.
+    -   Verify the format and basic content of the returned recommendations.
+-   **Incremental Testing**:
+    -   Test individual recommendation rules with mock user data and energy patterns.
+    -   Test logic for combining recommendations from different sources.
+    -   Test feedback processing logic.
+
+#### 10. Testing Strategy
+
+##### 10.1 Testing Hierarchy
+1.  **Unit Tests - Simple Cases First**
+    -   Test rule-based logic (`evaluate_rule(user_data, energy_pattern)`).
+    -   Test `generate_recommendations(user_profile, energy_history, forecast)` with mock data inputs.
+    -   Test `process_feedback(recommendation_id, feedback_score)` function.
+2.  **Integration Tests - Minimal Setup**
+    -   Use `TestClient` to test API endpoints.
+    -   Mock external API calls (Forecasting Engine) and database interactions (PostgreSQL, InfluxDB) to focus on the recommendation logic.
+    -   Verify that calling `/recommendations/{user_id}` returns a plausible set of recommendations given mock data.
+3.  **End-to-End Tests - Critical Paths Only**
+    -   Simulate a user's energy consumption, trigger forecast generation, and then verify that appropriate recommendations appear on the frontend dashboard.
+    -   Test the feedback loop from the frontend to the backend.
+
+##### 10.2 Mocking Strategy - SIMPLIFIED APPROACH
+-   **Prefer Dependency Injection**: Clients for InfluxDB, PostgreSQL, Forecasting Service API will be injected.
+-   **Use Simple Stubs**: Mock database query results and external API responses to control test scenarios precisely.
+-   **Mock at System Boundaries**: Mock external services (Forecasting API) and databases (InfluxDB, PostgreSQL) when testing the core recommendation logic. Use real databases for broader integration tests.
+
+##### 10.3 Testing Tools & Frameworks
+-   **Python**: `pytest`, `pytest-asyncio`.
+-   **Mocking**: Built-in `unittest.mock`.
+
+##### 10.4 Test Data Management
+-   **Creation**: Create test user profiles, historical energy data (InfluxDB via `testcontainers`), and predefined recommendation rules (PostgreSQL).
+-   **Cleanup**: Delete test recommendations and feedback from PostgreSQL.
+
+#### 11. Monitoring & Logging
+-   **Logging**: Logs for recommendation generation (inputs, outputs), feedback processing, and rule evaluation.
+-   **Monitoring**: Number of recommendations generated, API request latency, feedback scores over time.
+-   **Alerting**: Alerts for low recommendation generation rates, high error rates, or significant changes in average feedback scores.
+
+#### 12. Dependencies
+-   PostgreSQL Database.
+-   InfluxDB (via Real-time Processing and Reporting services).
+-   Forecasting Engine Service (internal API call).
+-   Auth Service (internal API call for user profile).
+-   `fastapi`, `uvicorn`, `pandas`, `SQLAlchemy`, `psycopg2-binary`.
+
+#### 13. Potential Risks & Mitigations
+-   **Risk**: Generating irrelevant or repetitive recommendations.
+    -   **Mitigation**: Implement recommendation fatigue logic. Allow users to dismiss recommendations. Utilize user feedback to improve logic.
+-   **Risk**: Privacy concerns with personalized data.
+    -   **Mitigation**: Anonymize data where possible. Clear privacy policy. Secure data handling.
+-   **Risk**: Complex rules becoming unmanageable.
+    -   **Mitigation**: Develop a clear rule management system (e.g., admin UI). Categorize and prioritize rules.
+
+---
+
+### 3.6. Reporting & Analytics Service (API)
+
+#### 1. Core Functionality
+-   Provide aggregated energy usage and production data.
+-   Generate historical trend reports for various time periods (daily, weekly, monthly, yearly).
+-   Offer comparison functionalities (e.g., comparing current usage to previous periods or similar users).
+-   Expose data via a REST API for the frontend and potential third-party integrations.
+
+#### 2. Technical Design & Architecture
+-   **Technology**: Python FastAPI.
+-   **Database**: InfluxDB for time-series data, PostgreSQL for user/device metadata.
+-   **Querying**: Use InfluxDB's Flux query language for efficient time-series data retrieval and aggregation.
+-   **API Endpoints**:
+    -   `GET /reports/summary/{device_id}?period=...`: Get summary data (total consumption/production).
+    -   `GET /reports/trends/{device_id}?start_date=...&end_date=...&interval=...`: Get time-series data for charting.
+    -   `GET /reports/comparison/{device_id}?compare_to=...`: Compare usage.
+-   **Data Structures**: Response models based on aggregated data (e.g., `TimeSeriesData(timestamp: datetime, value_kwh: float)`).
+
+#### 3. User Experience
+-   Interactive charts and graphs on the web dashboard.
+-   Filters for date ranges and aggregation intervals.
+-   Clear display of key metrics.
+
+#### 4. Data Management
+-   **Input**: Processed energy data from InfluxDB.
+-   **Output**: Aggregated data returned via API. No new data stored by this service.
+
+#### 5. Error Handling & Edge Cases
+-   **No Data for Period**: Return empty data or appropriate message (204 No Content/404 Not Found).
+-   **Invalid Query Parameters**: Return 400 Bad Request.
+-   **InfluxDB Connection Errors**: Log and return 500 Internal Server Error.
+
+#### 6. Security Considerations
+-   **API Security**: Authenticate API requests (JWT). Ensure users can only query their own device data.
+-   **Data Access**: Read-only access to InfluxDB.
+
+#### 7. Performance & Scalability
+-   **Caching**: Implement Redis caching for frequently accessed reports/summaries.
+-   **Optimized Queries**: Design InfluxDB queries for maximum efficiency, leveraging tags and indexing.
+-   **Scalability**: Horizontally scalable FastAPI service.
+
+#### 8. Deployment & Infrastructure
+-   Containerized using Docker.
+-   Deployed on AWS ECS/EKS.
+-   InfluxDB (self-hosted or managed).
+-   Redis (AWS ElastiCache).
+
+#### 9. Test-Driven Development Verification
+-   **Immediate Verification**:
+    -   Manually send `GET` requests to various report endpoints.
+    -   Verify JSON structure and that basic calculations (e.g., sum) are correct for small, known datasets.
+-   **Incremental Testing**:
+    -   Test InfluxDB query generation functions with mock parameters.
+    -   Test data transformation functions from InfluxDB response to API response model.
+
+#### 10. Testing Strategy
+
+##### 10.1 Testing Hierarchy
+1.  **Unit Tests - Simple Cases First**
+    -   Test `build_flux_query(start, end, interval, device_id)` function.
+    -   Test data aggregation/transformation functions (e.g., converting raw InfluxDB query results into a desired API response format).
+2.  **Integration Tests - Minimal Setup**
+    -   Use `TestClient` to test API endpoints.
+    -   Use `testcontainers` with InfluxDB, pre-populate it with controlled test data.
+    -   Verify that API responses match expected aggregated data for various queries and time ranges.
+    -   Test caching mechanism by observing cache hits/misses (if implemented).
+3.  **End-to-End Tests - Critical Paths Only**
+    -   Simulate data ingestion -> processing -> storage.
+    -   Verify that the frontend dashboard correctly displays graphs and summaries using data retrieved from this service.
+
+##### 10.2 Mocking Strategy - SIMPLIFIED APPROACH
+-   **Prefer Dependency Injection**: InfluxDB client and Redis client will be injected.
+-   **Use Simple Stubs**: For unit tests, mock InfluxDB client's `query_api().query()` method to return pre-defined Flux table data. Mock Redis client for cache operations.
+-   **Mock at System Boundaries**: Mock InfluxDB and Redis in unit tests. Use `testcontainers` for InfluxDB and Redis for integration tests.
+
+##### 10.3 Testing Tools & Frameworks
+-   **Python**: `pytest`, `pytest-asyncio`.
+-   **Mocking**: Built-in `unittest.mock`.
+-   **Test Containers**: `testcontainers-python` for InfluxDB and Redis.
+
+##### 10.4 Test Data Management
+-   **Creation**: Generate controlled historical time-series data for InfluxDB (`testcontainers`) that covers various scenarios (e.g., flat consumption, spikes, missing data).
+-   **Cleanup**: Delete test data/measurements from InfluxDB after each test suite.
+
+#### 11. Monitoring & Logging
+-   **Logging**: Logs for API requests, query execution times, and cache hit/miss rates.
+-   **Monitoring**: API request count, latency, error rates. InfluxDB query performance. Cache utilization.
+-   **Alerting**: Alerts for high API latency, low cache hit rates, or InfluxDB query failures.
+
+#### 12. Dependencies
+-   InfluxDB.
+-   Redis.
+-   `fastapi`, `uvicorn`, `influxdb-client`, `redis`, `pandas`.
+
+#### 13. Potential Risks & Mitigations
+-   **Risk**: Slow report generation for large data sets.
+    -   **Mitigation**: Optimize InfluxDB schemas and queries. Implement caching. Consider pre-aggregating data for common reports.
+-   **Risk**: InfluxDB becoming a bottleneck.
+    -   **Mitigation**: Proper InfluxDB sizing and scaling. Review query patterns. Implement data archiving policies.
+-   **Risk**: Data accuracy issues impacting reports.
+    -   **Mitigation**: Strong validation in `Data Ingestion` and `Real-time Processing` services. Cross-check reported values against raw data occasionally.
+
+---
+
+### 3.7. User Interface (Web Application)
+
+#### 1. Core Functionality
+-   User Dashboard: Overview of real-time energy usage, historical trends, and forecasts.
+-   Reports Section: Customizable reports with filters for time periods and device types.
+-   Recommendations Display: Show personalized energy efficiency recommendations.
+-   Account Settings: User profile management, device management.
+-   Responsive Design: Optimized for desktop and mobile browsers.
+
+#### 2. Technical Design & Architecture
+-   **Technology**: React.js with Next.js (for server-side rendering, routing, API routes if needed, and build optimization).
+-   **State Management**: React Context API or Zustand/Jotai for simpler global state. Redux if complexity demands.
+-   **Charting Library**: ECharts or Chart.js for data visualization.
+-   **Styling**: Tailwind CSS or Styled Components.
+-   **API Interaction**: `fetch` API or `axios` for calling backend REST APIs.
+-   **Deployment**: Static hosting (S3 + CloudFront) for Next.js generated static pages, or serverful deployment on Vercel/Netlify/ECS for SSR.
+
+#### 3. User Experience
+-   Intuitive navigation and clear information hierarchy.
+-   Fast loading times and smooth transitions.
+-   Interactive charts with tooltips and zoom functionality.
+-   Accessibility considerations (ARIA attributes, keyboard navigation).
+-   Consistent design language.
+
+#### 4. Data Management
+-   **Frontend State**: Manages UI state, fetched data from backend APIs.
+-   **Client-side Caching**: Use React Query or SWR for efficient data fetching and caching.
+-   **No sensitive data stored directly on client-side (except secure JWT in HttpOnly cookies).**
+
+#### 5. Error Handling & Edge Cases
+-   **API Errors**: Display user-friendly error messages for failed API calls.
+-   **Loading States**: Show loading spinners/skeletons while data is being fetched.
+-   **Empty Data States**: Clearly indicate when no data is available for a selected period/device.
+-   **Network Issues**: Graceful degradation, offline indicators.
+
+#### 6. Security Considerations
+-   **Authentication**: Use JWT tokens retrieved from Auth Service. Store securely (e.g., HttpOnly cookies for session management, or in-memory for SPAs, being mindful of XSS).
+-   **Input Validation**: Frontend validation for forms (e.g., registration).
+-   **XSS Protection**: React/Next.js inherently provide protection against XSS.
+-   **CSRF Protection**: Use CSRF tokens if session-based authentication is preferred (though JWT reduces this risk).
+
+#### 7. Performance & Scalability
+-   **Bundle Size Optimization**: Code splitting, lazy loading components.
+-   **Image Optimization**: Next.js Image component.
+-   **Server-Side Rendering (SSR)**: Improves initial load time and SEO.
+-   **CDN**: Serve static assets from a CDN (CloudFront).
+
+#### 8. Deployment & Infrastructure
+-   Built using `npm run build` or `yarn build`.
+-   Deployed on AWS S3 for static assets + CloudFront for CDN, or directly on Vercel/Netlify for Next.js.
+-   Backend services exposed via API Gateway (e.g., AWS API Gateway).
+
+#### 9. Test-Driven Development Verification
+-   **Immediate Verification**:
+    -   Manually navigate through all main pages (login, dashboard, reports, settings).
+    -   Click on interactive elements (buttons, date pickers) and observe immediate UI changes.
+    -   Check console for JavaScript errors.
+-   **Incremental Testing**:
+    -   Test individual React components in isolation (e.g., render a `ChartComponent` with mock data).
+    -   Test custom hooks or utility functions.
+
+#### 10. Testing Strategy
+
+##### 10.1 Testing Hierarchy
+1.  **Unit Tests - Simple Cases First**
+    -   Test pure React components using React Testing Library to ensure they render correctly with specific props.
+    -   Test utility functions (e.g., date formatting, data transformations for charts).
+    -   Test custom hooks for state management or side effects.
+2.  **Integration Tests - Minimal Setup**
+    -   Test components that interact with Redux store/Context API.
+    -   Test components that fetch data, mocking the API calls using `msw` (Mock Service Worker) or `jest-fetch-mock`.
+    -   Verify that components correctly update based on fetched data or user interactions.
+3.  **End-to-End Tests - Critical Paths Only**
+    -   Use Playwright or Cypress to simulate user journeys:
+        -   User registration -> login -> view dashboard -> navigate to reports -> view recommendations.
+        -   Interact with charts (e.g., changing date ranges).
+    -   Ensure critical features are functional from user's perspective, interacting with the real backend.
+
+##### 10.2 Mocking Strategy - SIMPLIFIED APPROACH
+-   **Prefer Dependency Injection**: Components receive data and callbacks via props.
+-   **Use Simple Stubs**: For unit tests, `mockReturnValue` for functions, simple mock objects for context providers.
+-   **Mock at System Boundaries**: Use `msw` (Mock Service Worker) to mock network requests globally for integration tests, allowing components to fetch data as if from a real API without hitting the actual backend.
+
+##### 10.3 Testing Tools & Frameworks
+-   **JavaScript/TypeScript**: `Jest` (for unit/integration tests), `React Testing Library` (for component testing), `msw` (for API mocking).
+-   **E2E Testing**: `Playwright` or `Cypress`.
+
+##### 10.4 Test Data Management
+-   **Creation**: Define mock API responses (JSON files or inline objects) for component and integration tests. For E2E tests, rely on the backend test data setup.
+-   **Cleanup**: N/A for frontend tests, as they typically don't persist data.
+
+#### 11. Monitoring & Logging
+-   **Logging**: Client-side errors captured using tools like Sentry. Console logs for debugging.
+-   **Monitoring**: Web vitals (LCP, FID, CLS), page load times, user flow analytics (Google Analytics or similar).
+-   **Alerting**: Alerts for critical JavaScript errors or significant drops in performance metrics.
+
+#### 12. Dependencies
+-   All Backend Services (via REST APIs).
+-   `react`, `next`, `chart.js` / `echarts`, `axios` / `swr` / `react-query`, `tailwindcss`.
+
+#### 13. Potential Risks & Mitigations
+-   **Risk**: Inconsistent UI/UX across different browsers/devices.
+    -   **Mitigation**: Thorough cross-browser testing. Use responsive design frameworks and component libraries.
+-   **Risk**: Slow load times due to large bundle sizes.
+    -   **Mitigation**: Implement code splitting, lazy loading, image optimization. Monitor bundle size.
+-   **Risk**: Complex state management leading to bugs.
+    -   **Mitigation**: Choose appropriate state management solution. Clear state update patterns. Comprehensive testing.
+
+---
+
+## 4. Infrastructure and Deployment
+
+### 4.1 Cloud Provider
+-   **Amazon Web Services (AWS)** will be the chosen cloud provider for its comprehensive suite of services, scalability, and robust security features.
+
+### 4.2 Services Utilized
+-   **Compute**:
+    -   **AWS ECS (Elastic Container Service)**: For running containerized microservices (Auth, Data Ingestion, Real-time Processing, Forecasting, Recommendation, Reporting). Fargate launch type for serverless containers, simplifying scaling and management.
+-   **Networking**:
+    -   **AWS VPC (Virtual Private Cloud)**: Isolated network for secure resource deployment.
+    -   **AWS ALB (Application Load Balancer)**: Distribute incoming traffic across service instances and handle SSL termination.
+    -   **AWS API Gateway**: Optionally, to expose the backend services as a unified API, manage throttling, and security.
+    -   **AWS Route 53**: DNS management.
+-   **Databases**:
+    -   **AWS RDS (Relational Database Service) - PostgreSQL**: Managed PostgreSQL instances for `Authentication & User Service` and `Recommendation Engine` and `Forecasting Engine` metadata.
+    -   **InfluxDB**: Self-hosted on EC2 or utilize a third-party managed service if available for production (e.g., InfluxDB Cloud or AWS Timestream as an alternative for some use cases). Initial plan leans towards self-hosted for control.
+    -   **AWS ElastiCache (Redis)**: For caching in `Reporting & Analytics` and `Forecasting Engine`.
+-   **Messaging & Streaming**:
+    -   **AWS MSK (Managed Streaming for Kafka)**: Fully managed Apache Kafka service for high-throughput, low-latency data streaming between services.
+-   **Storage**:
+    -   **AWS S3 (Simple Storage Service)**: For storing frontend static assets, ML model artifacts, application logs, and backups.
+-   **Monitoring & Logging**:
+    -   **AWS CloudWatch**: For collecting logs, metrics, and setting up alarms.
+    -   **Prometheus & Grafana**: Deployed on ECS/EC2 for more granular application metrics and custom dashboards.
+-   **Security**:
+    -   **AWS IAM (Identity and Access Management)**: For fine-grained access control to AWS resources.
+    -   **AWS Secrets Manager**: Securely store API keys, database credentials, and other sensitive configuration.
+-   **DevOps**:
+    -   **GitHub Actions**: For CI/CD pipelines.
+    -   **Terraform**: For Infrastructure as Code (IaC) to provision and manage AWS resources.
+
+### 4.3 CI/CD Pipeline Considerations
+-   **Source Control**: GitHub.
+-   **Build**:
+    -   Frontend: `npm install`, `npm run build`.
+    -   Backend Services: Python dependency installation, Docker image build.
+-   **Testing**: Run unit, integration, and potentially E2E tests.
+-   **Deployment**:
+    -   Frontend: Build artifacts deployed to S3 and invalidated CloudFront cache.
+    -   Backend Services: Docker images pushed to AWS ECR (Elastic Container Registry), then ECS service definitions updated for rolling deployments.
+-   **Workflow**:
+    1.  `git push` to `main` branch triggers CI.
+    2.  Tests run, linting, security scans.
+    3.  On success, Docker images built and pushed to ECR.
+    4.  Terraform applies updates to ECS service definitions.
+    5.  Frontend static assets deployed to S3.
+
+## 5. Testing and Quality Assurance
+
+### 5.1 Testing Hierarchy (Applied across all components)
+1.  **Unit Tests - Simple Cases First**: Focus on individual functions, methods, and components in isolation. Test pure functions, business logic without external dependencies.
+    -   **Immediate Verification**: Assert direct function outputs, component renders with mock props.
+    -   **Incremental Testing**: Build up from smallest testable units.
+2.  **Integration Tests - Minimal Setup**: Verify interaction between components or services.
+    -   Test API endpoints, database interactions, message queue communication.
+    -   Use lightweight, in-memory alternatives (e.g., SQLite for PostgreSQL, `moto` for S3, `testcontainers` for external services like Kafka/InfluxDB) when possible to keep tests fast and isolated.
+3.  **End-to-End Tests - Critical Paths Only**: Simulate user journeys through the entire system.
+    -   Focus on the most important user flows (e.g., register, login, view dashboard, check reports).
+    -   These tests are slower and more brittle; keep them sparse and high-value.
+
+### 5.2 Mocking Strategy - SIMPLIFIED APPROACH
+-   **Design for Testability**: Favor dependency injection, single responsibility principle, and separation of concerns (business logic from infrastructure). This minimizes the need for complex mocks.
+-   **Prefer Real Implementations**: Use real objects/modules unless external dependencies (databases, APIs, message queues) are unavoidable.
+-   **Use Test Doubles Hierarchy**:
+    1.  **Real Implementations**: Use actual instances when possible and practical (e.g., an in-memory database for integration tests).
+    2.  **Fake Implementations**: Simple, in-memory versions of complex dependencies (e.g., an in-memory Kafka queue if a Python library provides one for testing).
+    3.  **Stubs**: Simple, hardcoded responses for specific method calls (e.g., a function returning a fixed value instead of making an API call).
+    4.  **Mocks**: Objects that record interactions and verify behavior. Used sparingly, typically at system boundaries to verify calls to external systems. Python's `unittest.mock` will be the primary tool.
+-   **Mock at System Boundaries**: When testing a service, mock its interactions with other services (e.g., API calls, database queries, message queue publishes/consumes). Avoid mocking internal components within a single service.
+
+### 5.3 Testing Tools & Frameworks
+-   **Backend (Python)**:
+    -   `pytest`: Primary testing framework.
+    -   `pytest-asyncio`: For testing FastAPI asynchronous code.
+    -   `pytest-cov`: For test coverage reporting.
+    -   `unittest.mock`: Python's built-in mocking library.
+    -   `fastapi.testclient.TestClient`: For integration testing FastAPI endpoints.
+    -   `testcontainers-python`: For spinning up Docker containers of databases (PostgreSQL, InfluxDB) and message queues (Kafka, Redis) for integration tests.
+    -   `moto`: For mocking AWS services (S3, SQS, etc.) in integration tests.
+-   **Frontend (React/Next.js)**:
+    -   `Jest`: Testing framework.
+    -   `React Testing Library`: For testing React components with user-centric focus.
+    -   `msw` (Mock Service Worker): For mocking API requests in integration tests.
+    -   `Playwright` or `Cypress`: For End-to-End browser automation tests.
+
+### 5.4 Test Data Management
+-   **Generation**:
+    -   **Unit Tests**: Simple, in-memory Python dictionaries/Pydantic models for request bodies or function inputs.
+    -   **Integration Tests**: `factory-boy` or custom Python scripts to generate realistic but controlled data for database and message queue seeding via `testcontainers`. For InfluxDB, specific time-series patterns.
+    -   **E2E Tests**: A dedicated API endpoint or script to populate the test environment with a known baseline dataset.
+-   **Cleanup**:
+    -   `pytest` fixtures with `yield` statements will ensure test data (e.g., in databases/message queues provisioned by `testcontainers`) is cleaned up after each test or test suite, ensuring isolation.
+    -   Kafka test topics will have short retention policies or be explicitly deleted.
+
+## 6. Monitoring & Logging
+
+### 6.1 Logging
+-   **Format**: All services will output structured logs (JSON format) containing essential information such as timestamp, service name, log level, request ID, message, and relevant context (e.g., user ID, device ID).
+-   **Centralized Logging**: AWS CloudWatch Logs will collect logs from all services.
+-   **Log Analysis**: CloudWatch Logs Insights or an ELK (Elasticsearch, Logstash, Kibana) stack for querying and analyzing logs.
+-   **Log Levels**: Standard levels (DEBUG, INFO, WARNING, ERROR, CRITICAL) will be used appropriately.
+
+### 6.2 Monitoring
+-   **Metrics Collection**:
+    -   **Application Metrics**: Prometheus client libraries will be integrated into backend services to expose custom metrics (e.g., API request latency, request count, error rates, Kafka consumer lag, model inference time).
+    -   **Infrastructure Metrics**: AWS CloudWatch metrics for EC2, ECS, RDS, MSK, S3, etc.
+    -   **Database Metrics**: Built-in metrics from RDS (PostgreSQL) and InfluxDB for performance.
+-   **Visualization**: Grafana dashboards will be used to visualize Prometheus and CloudWatch metrics. Custom dashboards for key business metrics (e.g., total energy consumed, number of active devices).
+-   **Tracing**: AWS X-Ray (or OpenTelemetry with Jaeger) for distributed tracing to visualize request flows across microservices and identify bottlenecks.
+
+### 6.3 Alerting
+-   **Threshold-based Alerts**: AWS CloudWatch Alarms will be configured for critical metrics (e.g., high error rates, service unavailability, low disk space, high CPU/memory utilization, Kafka consumer lag).
+-   **Error Tracking**: Sentry.io will be integrated into frontend and backend services to capture and report application errors in real-time, providing stack traces and context.
+-   **Notification Channels**: Alerts will be routed to Slack, PagerDuty, or email for immediate team awareness.
+
+## 7. Dependencies
+
+### 7.1 Internal Dependencies
+-   **API Gateway**: All frontend and external integrations rely on this.
+-   **Auth Service**: All other backend services depend on this for authentication/authorization.
+-   **Data Ingestion Service**: Depends on Kafka.
+-   **Real-time Processing Service**: Depends on Kafka and InfluxDB.
+-   **Forecasting Engine**: Depends on InfluxDB, S3, PostgreSQL.
+-   **Recommendation Engine**: Depends on PostgreSQL, InfluxDB, Forecasting Engine, Auth Service.
+-   **Reporting & Analytics Service**: Depends on InfluxDB, Redis.
+-   **Frontend**: Depends on all public backend API services.
+
+### 7.2 External Dependencies (Key Libraries/Services)
+-   **Python Ecosystem**: FastAPI, Uvicorn, SQLAlchemy, Pydantic, Passlib, PyJWT, Confluent-Kafka-Python, InfluxDB-Client, Pandas, Numpy, Scikit-learn, Prophet, Boto3, Redis-py.
+-   **JavaScript Ecosystem**: React, Next.js, Chart.js/ECharts, Axios/SWR/React Query, Tailwind CSS.
+-   **Cloud Services**: AWS (ECS, RDS, MSK, S3, CloudWatch, ElastiCache, Secrets Manager, IAM, Route 53, ALB, VPC).
+-   **Open Source Software**: Apache Kafka, PostgreSQL, InfluxDB, Redis, Docker, Prometheus, Grafana, Nginx.
+-   **Third-Party APIs**: (Potential future integrations) Smart meter APIs, utility company APIs, weather data APIs.
+
+## 8. Potential Risks & Mitigations
+
+| Risk                                  | Description                                                                 | Mitigation Strategy                                                                                                                                                                                                                           |
+| :------------------------------------ | :-------------------------------------------------------------------------- | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Data Quality & Consistency**        | Inaccurate, missing, or malformed data from various sources can corrupt analysis and forecasts. | Implement robust data validation at ingestion. Anomaly detection in real-time processing. Data reconciliation processes. Clear error handling and DLQ for bad messages. Data quality dashboards.                                            |
+| **Scalability Bottlenecks**           | High volume of energy data or user traffic overwhelms services or databases. | Microservices architecture with independent scaling. Use managed services (AWS ECS Fargate, RDS, MSK, ElastiCache). Horizontal scaling for all services. Performance testing under load. Caching at appropriate layers.                  |
+| **Security Vulnerabilities**          | Data breaches, unauthorized access, or attacks (e.g., SQL injection, XSS).  | Adhere to security best practices (HTTPS, input validation, secure password storage, least privilege IAM roles). Regular security audits and vulnerability scanning. JWT for API authentication. AWS Secrets Manager for sensitive data. |
+| **ML Model Accuracy & Drift**         | Forecasting and recommendation models become less accurate over time.       | Continuous model monitoring for performance metrics. Implement regular (automated) retraining. A/B testing for new models. Human-in-the-loop for recommendation feedback.                                                                 |
+| **Integration Complexity**            | Connecting diverse data sources (IoT, APIs) and microservices proves difficult. | Standardized API interfaces (REST). Use Kafka for asynchronous communication. Well-defined data contracts (Pydantic models, JSON schema). Comprehensive integration tests. Incrementally add data sources.                             |
+| **Cost Overruns**                     | Cloud resource usage exceeds budget.                                        | Regular cost monitoring and optimization (AWS Cost Explorer). Utilize serverless options (Fargate) where appropriate. Rightsizing instances. Implement resource tagging for cost allocation.                                             |
+| **Vendor Lock-in (Cloud/DB)**         | Dependence on a specific cloud provider or database technology limits flexibility. | Use open-source technologies (PostgreSQL, Kafka) where possible. Containerization (Docker) makes services portable. Abstracts database interactions via ORM/clients.                                                                     |
+| **Operational Complexity**            | Managing many microservices, monitoring, and debugging becomes overwhelming. | Robust CI/CD pipelines for automated deployments. Centralized logging and monitoring. Distributed tracing. Standardized Docker images and deployment patterns.                                                                              |
+| **User Adoption / UX Issues**         | Users find the platform difficult to use, or recommendations are not valuable. | User-centric design process. Early and continuous user feedback. Iterative development. Clear, actionable recommendations.                                                                                                                   |
+| **Data Retention & Compliance**       | Managing historical data growth and meeting data privacy regulations.       | Define clear data retention policies (InfluxDB time-to-live). Implement data archival strategy for cold data. Ensure compliance with relevant privacy regulations (e.g., GDPR, CCPA).                                                     |
+
+## 9. Implementation Timeline (High-Level Phases)
+
+This timeline provides a high-level overview. Each phase will involve iterative development cycles (sprints).
+
+### Phase 1: Foundation & Core Data Ingestion (6-8 Weeks)
+-   **Setup**: AWS Account, VPC, CI/CD pipeline, Monorepo structure.
+-   **Authentication & User Service**: Design, implement, test, deploy.
+-   **Data Ingestion Service**: Design, implement, test, deploy basic API endpoints. Set up Kafka topics and producers.
+-   **Real-time Processing Service (Initial)**: Consume raw data, basic cleansing/normalization, store in InfluxDB.
+-   **Database Setup**: PostgreSQL (RDS), InfluxDB (initial setup).
+-   **Monitoring & Logging**: Basic CloudWatch integration.
+
+### Phase 2: Real-time Monitoring & Basic Reporting (8-10 Weeks)
+-   **Real-time Processing Service (Enhancements)**: Add aggregation logic (e.g., hourly sums), simple anomaly detection.
+-   **Reporting & Analytics Service**: Implement API endpoints for real-time summaries and basic historical trends from InfluxDB.
+-   **Frontend (Dashboard)**: Implement core dashboard with real-time graphs and historical charts consuming data from Reporting Service. User login/registration pages.
+-   **Refinement**: Improve data model, add more robust error handling.
+
+### Phase 3: Forecasting & Recommendations (10-12 Weeks)
+-   **Energy Forecasting Engine**: Implement data retrieval, model training pipeline, and prediction API.
+-   **Recommendation Engine**: Develop initial rule-based recommendation logic and API.
+-   **Frontend (Forecasts & Recommendations)**: Integrate forecast visualizations and display personalized recommendations.
+-   **Data Enrichment**: Integrate external data sources (e.g., basic weather data) if beneficial for forecasting.
+
+### Phase 4: Advanced Features & Refinements (6-8 Weeks)
+-   **Reporting & Analytics (Enhancements)**: Add comparative analysis, custom report generation.
+-   **Recommendation Engine (Enhancements)**: Integrate user feedback, explore simple ML models for recommendations.
+-   **Alerting & Notifications**: Implement user-configurable alerts (e.g., high consumption thresholds).
+-   **User Management Enhancements**: Device management, multi-device support.
+-   **Performance Optimization**: Tune database queries, caching strategies.
+-   **Security Hardening**: Comprehensive penetration testing.
+
+### Phase 5: Deployment & Hardening (4-6 Weeks)
+-   **Full E2E Testing**: Comprehensive E2E tests for critical user journeys.
+-   **Performance Testing**: Load testing to identify bottlenecks and validate scalability.
+-   **Security Audits**: External security audit.
+-   **Documentation**: User guides, API documentation, operational runbooks.
+-   **Go-Live Preparation**: Final checks, user onboarding materials.
+-   **Post-Launch Monitoring**: Intensive monitoring and rapid response to initial issues.
+
+**Total Estimated Time**: Approximately 34-44 weeks (8-11 months) for a fully functional MVP with robust features. This estimate is highly dependent on team size and experience.
